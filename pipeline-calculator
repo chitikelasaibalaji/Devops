@@ -1,0 +1,49 @@
+pipeline{
+agent any
+tools{
+maven "Maven-3.6.1"
+}
+stages{
+stage("git checkout"){
+steps{
+git credentialsId: 'javahome2', url: 'https://github.com/chitikelasaibalaji/myweb.git'
+}
+}
+stage("build){
+steps{
+sh "mvn clean sonar:sonar package"
+}
+}
+stage('Publish to Nexus') {
+            steps {
+                // Publish artifacts to Nexus
+                nexusArtifactUploader(
+                    nexusVersion: 'nexus3',
+                    protocol: 'http',
+                    nexusUrl: '172.31.47.139:8081',
+                    groupId: 'com.yourcompany',
+                    version: '1.0.0',
+                    repository: 'sample-releases',
+                    credentialsId: NEXUS_CREDENTIALS_ID,
+                    artifacts: [
+                        [artifactId: 'mobile-calculator', classifier: '', file: 'target/mobile-calculator-1.0.0.war', type: 'war']
+                    ]
+                )
+            }
+            stage("build docker"){
+            steps{
+                 sh 'docker build -t saibalajich/mobile-calculator .'
+                 sh 'docker build -t tomcat:${BUILD_NUMBER} .'
+                 sh 'docker run -itd --name balaji125 -p 3500:8080 tomcat:${BUILD_NUMBER}'
+                }
+          }
+            stage('Push Docker Image') {
+            steps {
+                  withCredentials([string(credentialsId: 'DOCKER_HUB_CREDENTIALS', variable: 'DOCKER_CREDENTIALS_ID')]) {
+                        sh "docker login -u saibalajich -p ${DOCKER_HUB_CREDENTIALS}"
+                    }
+                    sh 'docker push saibalajich/mobile-calculator'
+                }
+            }
+      }
+ }
